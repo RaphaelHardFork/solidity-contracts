@@ -7,7 +7,7 @@ pragma solidity ^0.8.0;
 import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/utils/Address.sol";
 import "./Ownable.sol";
 
-contract SmartWallet is Ownable {
+contract SmartWallet {
     // library usage
     using Address for address payable;
 
@@ -17,6 +17,8 @@ contract SmartWallet is Ownable {
     uint256 private _profit;
     uint256 private _totalProfit;
     mapping(address => uint256) private _depositTime;
+    address private _owner;
+    mapping(address => bool) private _whiteList;
 
     // Events
     event Deposited(address indexed sender, uint256 amount, uint256 epochTime);
@@ -29,11 +31,12 @@ contract SmartWallet is Ownable {
     );
 
     // constructor
-    constructor(address owner_, uint256 percentage_) Ownable(owner_) {
+    constructor(uint256 percentage_, address owner_) {
         require(
             percentage_ >= 0 && percentage_ <= 100,
             "SmartWallet: Invalid percentage"
         );
+        _owner = owner_;
         _percentage = percentage_;
     }
 
@@ -45,6 +48,14 @@ contract SmartWallet is Ownable {
             "SmartWallet: You are not a members, please deposit and wait 5min"
         );
         _; // +300 correspond à 5min
+    }
+
+    modifier onlyOwner() {
+        require(
+            msg.sender == _owner,
+            "Ownable: Only owner can call this function"
+        );
+        _;
     }
 
     // Function declarations below
@@ -100,6 +111,10 @@ contract SmartWallet is Ownable {
         _percentage = percentage_;
     }
 
+    function setWhiteList(address account) public onlyOwner {
+        _whiteList[account] = !_whiteList[account];
+    }
+
     function balanceOf(address account) public view returns (uint256) {
         return _balances[account];
     }
@@ -125,6 +140,14 @@ contract SmartWallet is Ownable {
         return block.timestamp;
     }
 
+    function owner() public view returns (address) {
+        return _owner;
+    }
+
+    function isOnWhiteList(address account) public view returns (bool) {
+        return _whiteList[account];
+    }
+
     function _deposit(address sender, uint256 amount) private {
         _balances[sender] += amount;
         _depositTime[sender] = block.timestamp;
@@ -140,7 +163,10 @@ contract SmartWallet is Ownable {
             _balances[recipient] >= amount,
             "SmartWallet: Not enough Ether"
         );
-        uint256 fees = _calculateFees(amount, _percentage);
+        uint256 fees =
+            _whiteList[recipient] == true
+                ? 0
+                : _calculateFees(amount, _percentage);
         uint256 newAmount = amount - fees;
         _balances[recipient] -= amount;
         _profit += fees;
